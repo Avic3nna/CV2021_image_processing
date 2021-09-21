@@ -23,6 +23,7 @@ typing module, but not for NumPy arrays.
 """
 import cv2
 import numpy as np
+from util import normalize_kernel, gkern, rotate_image, rotate_image_fast
 
 """
 Task 1: Convolution
@@ -51,7 +52,57 @@ to write this function.
 """
 def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
                 kernel_height : int, add : bool, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
+    
+    # Suppose an image has size W x W, the filter has size F x F, 
+    # the padding is P, and the stride is S. Then:
+    # If you set stride to 1, then setting P = (F-1)/2 will generated convolution
+    # result size equal to the image size
+    
+    
+    # if in_place is True, then the output image should be a copy of the input image. The default is False,
+    # i.e. the operations are performed on the input image.
+    if(in_place): #does this work ??????? Is this what they mean
+        image_ = image.copy()
+
+    else:
+        image_ = image
+    
+    # we don't want negative dimensions
+    kernel_height = abs(kernel_height)
+    kernel_width = abs(kernel_width)
+    # check if kernel is odd, if not add 1 dim
+    if(kernel_height % 2 == 0): #even number
+        kernel_height += 1
+        print("Even kernel height dimension, added 1 to make odd.\n")
+    
+    if(kernel_width % 2 == 0): #even number
+        kernel_width += 1
+        print("Even kernel width dimension, added 1 to make odd.\n")
+    
+    # ph=kh−1 and  pw=kw−1
+    padding_height = kernel_height - 1
+    padding_width = kernel_width - 1
+
+
+    ### add padding to image 
+    #https://stackoverflow.com/questions/43391205/add-padding-to-images-to-get-them-into-the-same-shape
+    top = padding_height
+    bottom = padding_height
+    left = padding_width
+    right = padding_width
+    ZEROPADDING = [0,0,0] 
+    image_padded = cv2.copyMakeBorder(image_, top, bottom, left, right, cv2.BORDER_CONSTANT, value=ZEROPADDING)
+
+    ### convolution
+    
+    
+    
+    
+    ### after convolution on end result
+    #if add is true, then 128 is added to each pixel for the result to get rid of negatives.
+    if(add):
+        image_ += 128
+
     raise "not implemented yet!"
 
 
