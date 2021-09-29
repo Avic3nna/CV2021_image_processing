@@ -24,6 +24,8 @@ typing module, but not for NumPy arrays.
 import cv2
 import numpy as np
 from util import normalize_kernel, gkern, rotate_image, rotate_image_fast
+import math
+import helpers
 
 """
 Task 1: Convolution
@@ -102,7 +104,7 @@ def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
 
     # grab the spatial dimensions of the image, along with
     # the spatial dimensions of the kernel
-    (iH, iW) = image.shape[:2]
+    (iH, iW) = image_.shape[:2]
     (kH, kW) = kernel.shape[:2]
     # allocate memory for the output image, taking care to
     # "pad" the borders of the input image so the spatial
@@ -162,7 +164,16 @@ and save as "task2.png".
 """
 def gaussian_blur_image(image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :
     "implement the function here"
-    raise "not implemented yet!"
+    
+    radius = int(math.ceil(3 * sigma))
+    kernel_size = 2*radius + 1
+
+    kernel = helpers.matlab_style_gauss2D(shape=(kernel_size, kernel_size), sigma = sigma)
+    kernel_n = normalize_kernel(kernel)
+    output = convolution(image, kernel_n, kernel_size, kernel_size, add = False, in_place=False)
+
+    return output
+    #raise "not implemented yet!"
 
 
 """
