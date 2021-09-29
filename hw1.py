@@ -53,6 +53,12 @@ to write this function.
 def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
                 kernel_height : int, add : bool, in_place : bool = False) -> np.ndarray :
     
+    # ONLY WORKS FOR EQUAL SIZE KERNELS (SEE PADDING)
+    # DOESNT WORK FOR EVEN-NUMBERED KERNELS
+
+
+
+    kernel = np.flipud(np.fliplr(kernel))
     # Suppose an image has size W x W, the filter has size F x F, 
     # the padding is P, and the stride is S. Then:
     # If you set stride to 1, then setting P = (F-1)/2 will generated convolution
@@ -61,7 +67,7 @@ def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
     
     # if in_place is True, then the output image should be a copy of the input image. The default is False,
     # i.e. the operations are performed on the input image.
-    if(in_place): #does this work ??????? Is this what they mean
+    if(in_place):
         image_ = image.copy()
 
     else:
@@ -79,6 +85,7 @@ def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
         kernel_width += 1
         print("Even kernel width dimension, added 1 to make odd.\n")
     
+
     # ph=kh−1 and  pw=kw−1
     padding_height = kernel_height - 1
     padding_width = kernel_width - 1
@@ -91,19 +98,48 @@ def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
     left = padding_width
     right = padding_width
     ZEROPADDING = [0,0,0] 
-    image_padded = cv2.copyMakeBorder(image_, top, bottom, left, right, cv2.BORDER_CONSTANT, value=ZEROPADDING)
+
+
+    # grab the spatial dimensions of the image, along with
+    # the spatial dimensions of the kernel
+    (iH, iW) = image.shape[:2]
+    (kH, kW) = kernel.shape[:2]
+    # allocate memory for the output image, taking care to
+    # "pad" the borders of the input image so the spatial
+    # size (i.e., width and height) are not reduced
+    pad = (kW - 1) // 2
+    image_ = cv2.copyMakeBorder(image_, pad, pad, pad, pad,
+        cv2.BORDER_CONSTANT, value=0)
+    output = np.zeros((iH, iW), dtype="float32")
 
     ### convolution
+    #https://github.com/detkov/Convolution-From-Scratch/blob/main/convolution.py
+    #add for loop to go over every rgb channel
+    for y in np.arange(pad, iH + pad):
+        for x in np.arange(pad, iW + pad):
+            # extract the ROI of the image by extracting the
+            # *center* region of the current (x, y)-coordinates
+            # dimensions
+            roi = image_[(y - pad):(y + pad + 1), (x - pad):(x + pad + 1)]
+            # perform the actual convolution by taking the
+            # element-wise multiplicate between the ROI and
+            # the kernel, then summing the matrix
+            k = (roi * kernel).sum()
+            # store the convolved value in the output (x,y)-
+            # coordinate of the output image
+            if (k>255):
+                k=255
+            output[y - pad, x - pad] = k
     
-    
-    
-    
+    print(output)
+
     ### after convolution on end result
     #if add is true, then 128 is added to each pixel for the result to get rid of negatives.
     if(add):
         image_ += 128
-
-    raise "not implemented yet!"
+    
+    return output
+    #raise "not implemented yet!"
 
 
 """
