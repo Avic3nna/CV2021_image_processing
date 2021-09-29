@@ -166,11 +166,13 @@ def gaussian_blur_image(image : np.ndarray, sigma : float, in_place : bool = Fal
     "implement the function here"
     
     radius = int(math.ceil(3 * sigma))
-    kernel_size = 2*radius + 1
+    kernel_size = 2*radius + 1 #total size (25) = 5x5
+    kernel_side = int(round(math.sqrt(kernel_size)))
 
-    kernel = helpers.matlab_style_gauss2D(shape=(kernel_size, kernel_size), sigma = sigma)
+    # proper normalizing constant??????????
+    kernel = helpers.matlab_style_gauss2D(shape=(kernel_side, kernel_side), sigma = sigma)
     kernel_n = normalize_kernel(kernel)
-    output = convolution(image, kernel_n, kernel_size, kernel_size, add = False, in_place=False)
+    output = convolution(image, kernel_n, kernel_side, kernel_side, add = False, in_place=False)
 
     return output
     #raise "not implemented yet!"
@@ -194,7 +196,24 @@ To do: Gaussian blur the image "songfestival.jpg" using this function with a sig
 """
 def separable_gaussian_blur_image (image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :  
     "implement the function here"
-    raise "not implemented yet!"
+    
+    radius = int(math.ceil(3 * sigma))
+    kernel_size = 2*radius + 1 #total size (25) = 5x5
+    kernel_side = int(round(math.sqrt(kernel_size)))
+
+    kernel_hori = helpers.matlab_style_gauss2D(shape=(1, kernel_side), sigma = sigma)
+    kernel_vert = helpers.matlab_style_gauss2D(shape=(kernel_side, 1), sigma = sigma)
+    kernel_n_hori = normalize_kernel(kernel_hori)
+    kernel_n_vert = normalize_kernel(kernel_vert)
+
+    #horizontally
+    horiz_conv = convolution(image, kernel_n_hori, 1, kernel_side, add = False, in_place=False)
+
+    #vertically
+    horiz_vert_conv = convolution(horiz_conv, kernel_n_vert, kernel_side, 1, add = False, in_place=False)
+
+    return horiz_vert_conv
+    #raise "not implemented yet!"
 
 """
 Task 4: Image derivatives
