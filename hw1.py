@@ -23,9 +23,9 @@ typing module, but not for NumPy arrays.
 """
 import cv2
 import numpy as np
-from util import normalize_kernel, gkern, rotate_image, rotate_image_fast
+from util import gkern, gkern1D
 import math
-import helpers
+
 
 """
 Task 1: Convolution
@@ -54,94 +54,52 @@ to write this function.
 """
 def convolution(image : np.ndarray, kernel : np.ndarray, kernel_width : int,
                 kernel_height : int, add : bool, in_place : bool = False) -> np.ndarray :
-    
-    # ONLY WORKS FOR EQUAL SIZE KERNELS (SEE PADDING)
-    # DOESNT WORK FOR EVEN-NUMBERED KERNELS
+    if not in_place:
+        image = image.copy()
 
-
-
-    kernel = np.flipud(np.fliplr(kernel))
-    # Suppose an image has size W x W, the filter has size F x F, 
-    # the padding is P, and the stride is S. Then:
-    # If you set stride to 1, then setting P = (F-1)/2 will generated convolution
-    # result size equal to the image size
-    
-    
-    # if in_place is True, then the output image should be a copy of the input image. The default is False,
-    # i.e. the operations are performed on the input image.
-    if(in_place):
-        image_ = image.copy()
-
+    if image.ndim == 3:
+        (iH, iW, colour_channels) = image.shape
+        output = np.zeros((iH, iW, colour_channels), dtype="float32")
     else:
-        image_ = image
+        (iH, iW) = image.shape
+        colour_channels = 0
+        output = np.zeros((iH, iW), dtype="float32")    
+
+    # Check parameters
+    if(kernel.shape[0] % 2 == 0 or kernel.shape[1] % 2 == 0): #even number
+        print("Error! Kernel dimensions are even, but require to be odd.\n")
+        return 
     
-    # we don't want negative dimensions
-    kernel_height = abs(kernel_height)
-    kernel_width = abs(kernel_width)
-    # check if kernel is odd, if not add 1 dim
-    if(kernel_height % 2 == 0): #even number
-        kernel_height += 1
-        print("Even kernel height dimension, added 1 to make odd.\n")
-    
-    if(kernel_width % 2 == 0): #even number
-        kernel_width += 1
-        print("Even kernel width dimension, added 1 to make odd.\n")
-    
+    kH = kernel_height
+    kW = kernel_width
 
-    # ph=kh−1 and  pw=kw−1
-    padding_height = kernel_height - 1
-    padding_width = kernel_width - 1
+    # calculate padding
+    pad_tb = (kW - 1) // 2  
+    pad_lr = (kH - 1) // 2 
 
+    # Convolution
+    # Flip the kernel
+    kernel = np.flipud(np.fliplr(kernel))
 
-    ### add padding to image 
-    #https://stackoverflow.com/questions/43391205/add-padding-to-images-to-get-them-into-the-same-shape
-    top = padding_height
-    bottom = padding_height
-    left = padding_width
-    right = padding_width
-    ZEROPADDING = [0,0,0] 
-
-
-    # grab the spatial dimensions of the image, along with
-    # the spatial dimensions of the kernel
-    (iH, iW) = image_.shape[:2]
-    (kH, kW) = kernel.shape[:2]
-    # allocate memory for the output image, taking care to
-    # "pad" the borders of the input image so the spatial
-    # size (i.e., width and height) are not reduced
-    pad = (kW - 1) // 2
-    image_ = cv2.copyMakeBorder(image_, pad, pad, pad, pad,
+    image_pad = cv2.copyMakeBorder(image, pad_tb, pad_tb, pad_lr, pad_lr,
         cv2.BORDER_CONSTANT, value=0)
-    output = np.zeros((iH, iW), dtype="float32")
 
-    ### convolution
-    #https://github.com/detkov/Convolution-From-Scratch/blob/main/convolution.py
-    #add for loop to go over every rgb channel
-    for y in np.arange(pad, iH + pad):
-        for x in np.arange(pad, iW + pad):
-            # extract the ROI of the image by extracting the
-            # *center* region of the current (x, y)-coordinates
-            # dimensions
-            roi = image_[(y - pad):(y + pad + 1), (x - pad):(x + pad + 1)]
-            # perform the actual convolution by taking the
-            # element-wise multiplicate between the ROI and
-            # the kernel, then summing the matrix
-            k = (roi * kernel).sum()
-            # store the convolved value in the output (x,y)-
-            # coordinate of the output image
-            if (k>255):
-                k=255
-            output[y - pad, x - pad] = k
-    
-    print(output)
 
-    ### after convolution on end result
-    #if add is true, then 128 is added to each pixel for the result to get rid of negatives.
-    if(add):
-        image_ += 128
-    
+    for i in range(iH):
+        center_x = pad_tb + i
+        indices_x = [center_x + l for l in range(-pad_tb, pad_tb  + 1)]
+        for j in range(iW):
+            center_y = pad_lr + j
+            indices_y = [center_y + l for l in range(-pad_lr, pad_lr + 1)]
+            submatrix = image_pad[indices_x, :][:, indices_y]
+
+            if colour_channels == 3: #RGB
+                for channel in range(colour_channels):
+                    output[i][j][channel] = np.sum(np.multiply(submatrix[:, :, channel], kernel)) + add * 128
+            else:
+                output[i][j] = np.sum(np.multiply(submatrix, kernel)) + add * 128
+
     return output
-    #raise "not implemented yet!"
 
 
 """
@@ -163,19 +121,15 @@ To do: Gaussian blur the image "songfestival.jpg" using this function with a sig
 and save as "task2.png".
 """
 def gaussian_blur_image(image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
     
     radius = int(math.ceil(3 * sigma))
-    kernel_size = 2*radius + 1 #total size (25) = 5x5
-    kernel_side = int(round(math.sqrt(kernel_size)))
+    kernel_size = 2*radius + 1
 
-    # proper normalizing constant??????????
-    kernel = helpers.matlab_style_gauss2D(shape=(kernel_side, kernel_side), sigma = sigma)
-    kernel_n = normalize_kernel(kernel)
-    output = convolution(image, kernel_n, kernel_side, kernel_side, add = False, in_place=False)
+    kernel = gkern(kernlen=kernel_size, nsig=sigma)
+    output = convolution(image, kernel, kernel_size, kernel_size, add = False, in_place=False)
 
     return output
-    #raise "not implemented yet!"
+
 
 
 """
@@ -195,25 +149,33 @@ identical to that of gaussian_blur_image.
 To do: Gaussian blur the image "songfestival.jpg" using this function with a sigma of 4.0, and save as "task3.png".
 """
 def separable_gaussian_blur_image (image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :  
-    "implement the function here"
     
-    radius = int(math.ceil(3 * sigma))
-    kernel_size = 2*radius + 1 #total size (25) = 5x5
-    kernel_side = int(round(math.sqrt(kernel_size)))
 
-    kernel_hori = helpers.matlab_style_gauss2D(shape=(1, kernel_side), sigma = sigma)
-    kernel_vert = helpers.matlab_style_gauss2D(shape=(kernel_side, 1), sigma = sigma)
-    kernel_n_hori = normalize_kernel(kernel_hori)
-    kernel_n_vert = normalize_kernel(kernel_vert)
+    if not in_place:
+        image = image.copy()
+
+    radius = int(math.ceil(3 * sigma))
+    kernel_size = 2*radius + 1
+    #kernel_size = 3 #just for checking, remove after
+
+    kernel_hori = (gkern1D(kernlen=kernel_size, nsig=sigma)).T
+    kernel_vert = gkern1D(kernlen=kernel_size, nsig=sigma)
+
+
+    print(kernel_hori.shape)
+    print(kernel_vert.shape)
 
     #horizontally
-    horiz_conv = convolution(image, kernel_n_hori, 1, kernel_side, add = False, in_place=False)
+    horiz_conv = convolution(image, kernel_hori, kernel_hori.shape[0], kernel_hori.shape[1], add = False, in_place=False)
 
     #vertically
-    horiz_vert_conv = convolution(horiz_conv, kernel_n_vert, kernel_side, 1, add = False, in_place=False)
+    vert_horiz_conv = convolution(horiz_conv, kernel_vert, kernel_vert.shape[0], kernel_vert.shape[1], add = False, in_place=False)
 
-    return horiz_vert_conv
-    #raise "not implemented yet!"
+    #minmax normalisation
+    rescaled_output = (((vert_horiz_conv - np.min(vert_horiz_conv))/(np.max(vert_horiz_conv) - np.min(vert_horiz_conv)))*255).astype("uint8")
+
+    return rescaled_output
+
 
 """
 Task 4: Image derivatives
@@ -242,16 +204,25 @@ To do: Compute the x-derivative, the y-derivative and the second derivative of t
 and "task4c.png" respectively.
 """
 def first_deriv_image_x(image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    kernel = np.array([[-1, 0, 1]])
+    (kH, kW) = kernel.shape
+    dx = convolution(image, kernel, kH, kW, True)
+    return gaussian_blur_image(dx, sigma)
+
 
 def first_deriv_image_y(image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    kernel = np.array([[-1], [0], [1]])
+    (kH, kW) = kernel.shape
+    dy = convolution(image, kernel, kH, kW, True)
+    return gaussian_blur_image(dy, sigma)
+
 
 def second_deriv_image(image : np.ndarray, sigma : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
+    (kH, kW) = kernel.shape
+    ddx = convolution(image, kernel, kH, kW, True)
+    return gaussian_blur_image(ddx, sigma)
+
 
 
 """
@@ -266,8 +237,10 @@ the second_deriv_image implementation and subtract back off the 128 that second 
 To do: Sharpen "yosemite.png" with a sigma of 1.0 and alpha of 5.0 and save as "task5.png".
 """
 def sharpen_image(image : np.ndarray, sigma : float, alpha : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    second_derivative = second_deriv_image(image, sigma, in_place=True) - 128
+    image = image - second_derivative*alpha
+    return image
+
 
 """
 Task 6: Edge Detection
@@ -285,8 +258,22 @@ orientation of the edges in the image.
 To do: Compute Sobel edge magnitude and orientation on "cactus.jpg" and save as "task6.png".
 """
 def sobel_image(image : np.ndarray, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    image= cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    print(image.shape)
+    print(np.mean(image))
+
+    k_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    x_dir = convolution(image, k_x, k_x.shape[0], k_x.shape[1], False)/8.
+
+
+    k_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+    y_dir = convolution(image, k_y, k_y.shape[0], k_y.shape[1], False)/8.
+
+    print(y_dir)
+    magnitude = np.hypot(x_dir, y_dir)
+    direction = np.arctan(x_dir / y_dir)
+    return magnitude, direction
+
 
 """
 Task 7: Bilinear Interpolation
@@ -301,15 +288,62 @@ To do: The function rotate_image will be implemented in a lab and it uses biline
 to rotate an image. Rotate the image "yosemite.png" by 20 degrees and save as "task7.png".
 """
 def bilinear_interpolation(image : np.ndarray, x : float, y : float) -> np.ndarray :
-    "Returns a  vector containing interpolated red green and blue values (a vector of length 3)"
-    "implement the function here"
-    raise "not implemented yet!"
+    vect = 0.
+    iH, iW, *_ = image.shape
+    x1 = math.floor(x)
+    y1 = math.floor(y)
+
+    x2 = math.ceil(x)
+    y2 = math.ceil(y)
+
+    if x1 < 0 or y1 < 0 or x2 < 0 or y2 < 0:
+        return vect
+
+    if x1 >= iH or x2 >= iH or y1 >= iW or y2 >= iW:
+        return vect
+
+    q11 = image[x1][y1]
+    q12 = image[x1][y2]
+    q21 = image[x2][y1]
+    q22 = image[x2][y2]
+
+    dividend = (q11 * (x2 - x) * (y2 - y) +
+            q21 * (x - x1) * (y2 - y) +
+            q12 * (x2 - x) * (y - y1) +
+            q22 * (x - x1) * (y - y1)
+            )
+    divisor = ((x2 - x1) * (y2 - y1) + 0.0)
+
+    if divisor != 0:
+        vect = dividend / divisor
+    return vect
+
+
 
 def rotate_image (image : np.ndarray, rotation_angle : float, in_place : bool = False) -> np.ndarray :
-    rgb = bilinear_interpolation (image, 0.5, 0.0)
-    "To be implemented by the lecturer"
-    raise "not implemented yet"
+    "from lab"
+    radians = math.radians(rotation_angle)
+    image_copy = np.zeros_like(image)
+    iH, iW, *_ = image.shape
+    image_height_div2 = iH / 2.0
+    image_width_div2 = iW / 2.0
 
+    cos = math.cos(radians)
+    sin = math.sin(radians)
+
+    for r in range(iH):
+        x0 = r - image_height_div2
+        x0_cos = x0 * cos
+        x0_sin = x0 * sin
+        for c in range(iW):
+            y0 = c - image_width_div2
+            x1 = x0_cos - y0 * sin
+            y1 = x0_sin + y0 * cos
+            x1 += image_height_div2
+            y1 += image_width_div2
+            rgb = bilinear_interpolation(image, x1, y1)
+            image_copy[r][c] = rgb
+    return image_copy
  
 """
 Task 8: Finding edge peaks
@@ -333,8 +367,36 @@ To do: Find the peak responses in "virgintrains.jpg" with thres = 40.0 and save 
 What would be a better value for thres?
 """
 def find_peaks_image(image : np.ndarray, thres : float, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+    magnitude, direction = sobel_image(image)
+    iH, iW = image.shape
+
+    dst_image = np.zeros_like(image)
+
+ 
+    for c in range(0, iW):
+
+        for r in range(0, iH):
+            angle = direction[c][r]
+            if math.isnan(angle):
+                angle = 0
+
+            e1x = c + 1 * np.cos(angle)
+            e1y = r + 1 * np.sin(angle)
+            e2x = c - 1 * np.cos(angle)
+            e2y = r - 1 * np.sin(angle)
+
+#            print("%d %d: %f %f %f %f (%f)" % (c, r, e1x, e1y, e2x, e2y, direction[c][r]))
+
+            e = magnitude[c][r]
+            e1 = bilinear_interpolation(magnitude, e1x, e1y)
+            e2 = bilinear_interpolation(magnitude, e2x, e2y)
+
+            if e > thres and e > e1 and e > e2:
+                dst_image[c][r] = 255.
+    
+    return dst_image
+
+
 
 """
 Task 9 (a): K-means color clustering with random seeds (extra task)

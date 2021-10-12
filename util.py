@@ -24,6 +24,14 @@ def gkern(kernlen=21, nsig=3):
     kern2d = np.outer(kern1d, kern1d)
     return kern2d/kern2d.sum()
 
+def gkern1D(kernlen=21, nsig=3):
+    """Returns a 1D Gaussian kernel."""
+    
+    x = np.linspace(-nsig, nsig, kernlen+1)
+    kern1d = np.diff(st.norm.cdf(x))
+    kern1d = np.reshape(kern1d, (kernlen, 1))
+    return kern1d/kern1d.sum()
+
 
 """
 Function to rotate an image around its center and using an appropriate interpolation funciton with signature
