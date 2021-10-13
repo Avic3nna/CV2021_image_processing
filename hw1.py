@@ -171,10 +171,7 @@ def separable_gaussian_blur_image (image : np.ndarray, sigma : float, in_place :
     #vertically
     vert_horiz_conv = convolution(horiz_conv, kernel_vert, kernel_vert.shape[0], kernel_vert.shape[1], add = False, in_place=False)
 
-    #minmax normalisation
-    rescaled_output = (((vert_horiz_conv - np.min(vert_horiz_conv))/(np.max(vert_horiz_conv) - np.min(vert_horiz_conv)))*255).astype("uint8")
-
-    return rescaled_output
+    return vert_horiz_conv
 
 
 """
@@ -258,9 +255,12 @@ orientation of the edges in the image.
 To do: Compute Sobel edge magnitude and orientation on "cactus.jpg" and save as "task6.png".
 """
 def sobel_image(image : np.ndarray, in_place : bool = False) -> np.ndarray :
+    if not in_place:
+        image = image.copy()
+    
     image= cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    print(image.shape)
-    print(np.mean(image))
+    # print(image.shape)
+    # print(np.mean(image))
 
     k_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
     x_dir = convolution(image, k_x, k_x.shape[0], k_x.shape[1], False)/8.
@@ -269,9 +269,9 @@ def sobel_image(image : np.ndarray, in_place : bool = False) -> np.ndarray :
     k_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
     y_dir = convolution(image, k_y, k_y.shape[0], k_y.shape[1], False)/8.
 
-    print(y_dir)
+    #print(y_dir)
     magnitude = np.hypot(x_dir, y_dir)
-    direction = np.arctan(x_dir / y_dir)
+    direction = np.arctan(np.divide(x_dir, y_dir))
     return magnitude, direction
 
 
@@ -288,35 +288,36 @@ To do: The function rotate_image will be implemented in a lab and it uses biline
 to rotate an image. Rotate the image "yosemite.png" by 20 degrees and save as "task7.png".
 """
 def bilinear_interpolation(image : np.ndarray, x : float, y : float) -> np.ndarray :
-    vect = 0.
     iH, iW, *_ = image.shape
     x1 = math.floor(x)
     y1 = math.floor(y)
 
     x2 = math.ceil(x)
     y2 = math.ceil(y)
+    rgb = 0.0
 
     if x1 < 0 or y1 < 0 or x2 < 0 or y2 < 0:
-        return vect
+        return rgb
 
     if x1 >= iH or x2 >= iH or y1 >= iW or y2 >= iW:
-        return vect
+        return rgb
 
+    #https://en.wikipedia.org/wiki/Bilinear_interpolation
     q11 = image[x1][y1]
     q12 = image[x1][y2]
     q21 = image[x2][y1]
     q22 = image[x2][y2]
 
-    dividend = (q11 * (x2 - x) * (y2 - y) +
+    a = (q11 * (x2 - x) * (y2 - y) +
             q21 * (x - x1) * (y2 - y) +
             q12 * (x2 - x) * (y - y1) +
             q22 * (x - x1) * (y - y1)
             )
-    divisor = ((x2 - x1) * (y2 - y1) + 0.0)
+    b = ((x2 - x1) * (y2 - y1) + 0.0) #make a float
 
-    if divisor != 0:
-        vect = dividend / divisor
-    return vect
+    if b != 0:
+        rgb = a / b
+    return rgb
 
 
 
@@ -324,24 +325,16 @@ def rotate_image (image : np.ndarray, rotation_angle : float, in_place : bool = 
     "from lab"
     radians = math.radians(rotation_angle)
     image_copy = np.zeros_like(image)
-    iH, iW, *_ = image.shape
-    image_height_div2 = iH / 2.0
-    image_width_div2 = iW / 2.0
-
-    cos = math.cos(radians)
-    sin = math.sin(radians)
-
-    for r in range(iH):
-        x0 = r - image_height_div2
-        x0_cos = x0 * cos
-        x0_sin = x0 * sin
-        for c in range(iW):
-            y0 = c - image_width_div2
-            x1 = x0_cos - y0 * sin
-            y1 = x0_sin + y0 * cos
-            x1 += image_height_div2
-            y1 += image_width_div2
-            rgb = bilinear_interpolation(image, x1, y1)
+    image_height, image_width, *_ = image.shape
+    for r in range(image_height):
+        for c in range(image_width):
+            x0 = c - image_width/2.0
+            y0 = r - image_height/2.0
+            x1 = x0 * math.cos(radians) - y0 * math.sin(radians)
+            y1 = x0 * math.sin(radians) + y0 * math.cos(radians)
+            x1 += image_width/2.0
+            y1 += image_height/2.0
+            rgb = bilinear_interpolation(image, y1, x1)
             image_copy[r][c] = rgb
     return image_copy
  
@@ -368,7 +361,7 @@ What would be a better value for thres?
 """
 def find_peaks_image(image : np.ndarray, thres : float, in_place : bool = False) -> np.ndarray :
     magnitude, direction = sobel_image(image)
-    iH, iW = image.shape
+    iH, iW, *_ = image.shape
 
     dst_image = np.zeros_like(image)
 
@@ -380,12 +373,11 @@ def find_peaks_image(image : np.ndarray, thres : float, in_place : bool = False)
             if math.isnan(angle):
                 angle = 0
 
+            #from task 8 description
             e1x = c + 1 * np.cos(angle)
             e1y = r + 1 * np.sin(angle)
             e2x = c - 1 * np.cos(angle)
             e2y = r - 1 * np.sin(angle)
-
-#            print("%d %d: %f %f %f %f (%f)" % (c, r, e1x, e1y, e2x, e2y, direction[c][r]))
 
             e = magnitude[c][r]
             e1 = bilinear_interpolation(magnitude, e1x, e1y)
