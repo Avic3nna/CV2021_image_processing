@@ -25,7 +25,7 @@ import cv2
 import numpy as np
 from util import gkern, gkern1D
 import math
-
+import random
 
 """
 Task 1: Convolution
@@ -411,10 +411,77 @@ this algorithm is random, you will get different resultant images every time you
 
 To do: Perform random seeds clustering on "flowers.png" with num_clusters = 4 and save as "task9a.png".
 """
-def random_seed_image(image : np.ndarray, num_clusters : int, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+# adapted from https://medium.com/analytics-vidhya/image-segmentation-using-k-means-clustering-from-scratch-1545c896e38e
+np.random.seed(1337)
 
+class random_seed_image():
+    def __init__(self, num_clusters=4, max_iters=100, epsilon=30):
+        self.num_clusters = num_clusters
+        self.max_iters = max_iters
+        self.epsilon = epsilon
+        # list of sample indices for each cluster
+        self.clusters = [[] for _ in range(self.num_clusters)]
+        # the centers (mean feature vector) for each cluster
+        self.cntrs = []
+    def predict(self, X):
+        self.X = X
+        self.n_samples, self.n_features = X.shape
+        
+        # initialize random seed
+        random_sample_idxs = np.random.randint(255, size=(self.num_clusters, 3))
+        self.cntrs = [idx for idx in random_sample_idxs]
+        print(self.cntrs)
+        # Optimize clusters
+        for _ in range(self.max_iters):
+            # Assign samples to closest cntrs (create clusters)
+            self.clusters = self._create_clusters(self.cntrs)
+
+            # Calculate new cntrs from the clusters
+            cntrs_old = self.cntrs
+            self.cntrs = self._get_cntrs(self.clusters)
+            
+            # checnum_clusters if clusters have changed
+            if self._is_converged(cntrs_old, self.cntrs):
+                break
+
+        # Classify samples as the index of their clusters
+        return self._get_cluster_lab(self.clusters)
+    def _get_cluster_lab(self, clusters):
+        # each sample will get the label of the cluster it was assigned to
+        lab = np.empty(self.n_samples)
+        for cluster_idx, cluster in enumerate(clusters):
+            for sample_index in cluster:
+                lab[sample_index] = cluster_idx
+        return lab
+    def _create_clusters(self, cntrs):
+        # Assign the samples to the closest centroids to create clusters
+        clusters = [[] for _ in range(self.num_clusters)]
+        for idx, sample in enumerate(self.X):
+            cntr_idx = self._closest_cntr(sample, cntrs)
+            clusters[cntr_idx].append(idx)
+        return clusters
+    def _closest_cntr(self, sample, cntrs):
+        # dist of the current sample to each centroid
+        ds = [L1(sample, point) for point in cntrs]
+        closest_index = np.argmin(ds)
+        return closest_index
+    def _get_cntrs(self, clusters):
+        # assign mean value of clusters to centroids
+        cntrs = np.zeros((self.num_clusters, self.n_features))
+        for cluster_idx, cluster in enumerate(clusters):
+            cluster_mean = np.mean(self.X[cluster], axis=0)
+            cntrs[cluster_idx] = cluster_mean
+        return cntrs
+    def _is_converged(self, cntrs_old, cntrs):
+        # dist between each old and new centroids
+        ds = [L1(cntrs_old[i], cntrs[i]) for i in range(self.num_clusters)]
+        return sum(ds) < self.epsilon*self.num_clusters
+
+    def cent(self):
+        return self.cntrs
+
+def L1(x1, x2):
+    return np.sqrt(np.sum(np.abs((x1 - x2))))
 """
 Task 9 (b): K-means color clustering with pixel seeds (extra)
 
@@ -431,6 +498,69 @@ is less than epsilon*num_clusters. Choose epsilon = 30.
 
 To do: Perform pixel seeds clustering on "flowers.png" with num_clusters = 5 and save as "task9b.png".
 """
-def pixel_seed_image(image : np.ndarray, num_clusters: int, in_place : bool = False) -> np.ndarray :
-    "implement the function here"
-    raise "not implemented yet!"
+# adapted from https://medium.com/analytics-vidhya/image-segmentation-using-k-means-clustering-from-scratch-1545c896e38e
+class pixel_seed_image():
+    def __init__(self, num_clusters=5, max_iters=100, epsilon=30):
+        self.num_clusters = num_clusters
+        self.max_iters = max_iters
+        self.epsilon = epsilon
+        # list of sample indices for each cluster
+        self.clusters = [[] for _ in range(self.num_clusters)]
+        # the centers (mean feature vector) for each cluster
+        self.cntrs = []
+    def predict(self, X):
+        self.X = X
+        self.n_samples, self.n_features = X.shape
+        
+        # initialize random seed
+        random_sample_idxs = np.random.choice(self.n_samples, self.num_clusters, replace=False)
+        self.cntrs = [self.X[idx] for idx in random_sample_idxs]
+        print(self.cntrs)
+        # Optimize clusters
+        for _ in range(self.max_iters):
+            # Assign samples to closest cntrs (create clusters)
+            self.clusters = self._create_clusters(self.cntrs)
+
+            # Calculate new cntrs from the clusters
+            cntrs_old = self.cntrs
+            self.cntrs = self._get_cntrs(self.clusters)
+            
+            # checnum_clusters if clusters have changed
+            if self._is_converged(cntrs_old, self.cntrs):
+                break
+
+        # Classify samples as the index of their clusters
+        return self._get_cluster_lab(self.clusters)
+    def _get_cluster_lab(self, clusters):
+        # each sample will get the label of the cluster it was assigned to
+        lab = np.empty(self.n_samples)
+        for cluster_idx, cluster in enumerate(clusters):
+            for sample_index in cluster:
+                lab[sample_index] = cluster_idx
+        return lab
+    def _create_clusters(self, cntrs):
+        # Assign the samples to the closest centroids to create clusters
+        clusters = [[] for _ in range(self.num_clusters)]
+        for idx, sample in enumerate(self.X):
+            cntr_idx = self._closest_cntr(sample, cntrs)
+            clusters[cntr_idx].append(idx)
+        return clusters
+    def _closest_cntr(self, sample, cntrs):
+        # dist of the current sample to each centroid
+        ds = [L1(sample, point) for point in cntrs]
+        closest_index = np.argmin(ds)
+        return closest_index
+    def _get_cntrs(self, clusters):
+        # assign mean value of clusters to centroids
+        cntrs = np.zeros((self.num_clusters, self.n_features))
+        for cluster_idx, cluster in enumerate(clusters):
+            cluster_mean = np.mean(self.X[cluster], axis=0)
+            cntrs[cluster_idx] = cluster_mean
+        return cntrs
+    def _is_converged(self, cntrs_old, cntrs):
+        # dist between each old and new centroids
+        ds = [L1(cntrs_old[i], cntrs[i]) for i in range(self.num_clusters)]
+        return sum(ds) < self.epsilon*self.num_clusters
+
+    def cent(self):
+        return self.cntrs
